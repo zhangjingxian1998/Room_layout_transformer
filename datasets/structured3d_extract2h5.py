@@ -251,9 +251,9 @@ if __name__ == '__main__':
     train_dataloader = torch.utils.data.DataLoader(train_strcutured3d,batch_size=1)
     val_dataloader = torch.utils.data.DataLoader(val_strcutured3d,batch_size=1)
     test_dataloader = torch.utils.data.DataLoader(test_strcutured3d,batch_size=1)
-    # for i,data_one in enumerate(train_dataloader):
-    #     if i % 1000 == 0:
-    #         print(i)
+    for i,data_one in enumerate(train_dataloader):
+        if i % 1000 == 0:
+            print(i)
     for i,data_one in enumerate(val_dataloader):
         if i % 1000 == 0:
             print(i)

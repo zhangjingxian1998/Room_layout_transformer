@@ -163,6 +163,7 @@ def get_norm(norm, out_channels):
             "BN": BatchNorm2d,
             "GN": lambda channels: nn.GroupNorm(32, channels),
             "nnSyncBN": nn.SyncBatchNorm,  # keep for debugging
+            "Layernorm": nn.LayerNorm,
             "": lambda x: x,
         }[norm]
     return norm(out_channels)
@@ -734,7 +735,13 @@ class Conv2d(nn.Conv2d):
 
         x = super().forward(x)
         if self.norm is not None:
-            x = self.norm(x)
+            if isinstance(self.norm, nn.LayerNorm):
+                x_shape = x.shape
+                B = x.shape[0]
+                x = self.norm(x.view(B,-1))
+                x = x.view(x_shape)
+            else:
+                x = self.norm(x)
         if self.activation is not None:
             x = self.activation(x)
         return x
@@ -829,8 +836,16 @@ class BottleneckBlock(ResNetBlockBase):
         norm="BN",
         stride_in_1x1=False,
         dilation=1,
+        output_size=14,
     ):
         super().__init__(in_channels, out_channels, stride)
+
+        if norm == 'Layernorm':
+            out_c = bottleneck_channels * output_size * output_size
+            out_c_3 = out_channels * output_size * output_size
+        else:
+            out_c = bottleneck_channels
+            out_c_3 = out_channels
 
         if in_channels != out_channels:
             self.shortcut = Conv2d(
@@ -839,7 +854,7 @@ class BottleneckBlock(ResNetBlockBase):
                 kernel_size=1,
                 stride=stride,
                 bias=False,
-                norm=get_norm(norm, out_channels),
+                norm=get_norm(norm, out_c_3),
             )
         else:
             self.shortcut = None
@@ -849,13 +864,15 @@ class BottleneckBlock(ResNetBlockBase):
         # stride in the 3x3 conv
         stride_1x1, stride_3x3 = (stride, 1) if stride_in_1x1 else (1, stride)
 
+        
+
         self.conv1 = Conv2d(
             in_channels,
             bottleneck_channels,
             kernel_size=1,
             stride=stride_1x1,
             bias=False,
-            norm=get_norm(norm, bottleneck_channels),
+            norm=get_norm(norm, out_c),
         )
 
         self.conv2 = Conv2d(
@@ -867,7 +884,7 @@ class BottleneckBlock(ResNetBlockBase):
             bias=False,
             groups=num_groups,
             dilation=dilation,
-            norm=get_norm(norm, bottleneck_channels),
+            norm=get_norm(norm, out_c),
         )
 
         self.conv3 = Conv2d(
@@ -875,7 +892,7 @@ class BottleneckBlock(ResNetBlockBase):
             out_channels,
             kernel_size=1,
             bias=False,
-            norm=get_norm(norm, out_channels),
+            norm=get_norm(norm, out_c_3),
         )
 
     def forward(self, x):
