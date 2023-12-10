@@ -12,7 +12,7 @@ def parse():
     parser.add_argument('--batch_size_val',default=256)
     parser.add_argument('--batch_size_test',default=1)
     parser.add_argument('--num_workers',default=6)
-    parser.add_argument('--epochs',default=50)
+    parser.add_argument('--epochs',default=20)
     parser.add_argument('--weight',default=' ')
     
     parser.add_argument('--gpu_num',default=2)

@@ -16,7 +16,6 @@ class Model(nn.Module):
         self.vit = ViTModel.from_pretrained('pretrain_weight/vit-base-patch32-224-in21k')
         self.calculate_param = nn.Linear(768,4)
         self.dropout = nn.Dropout(p=0.1)
-        
         self.frozen_layer()
 
     def forward(self, data):
@@ -41,3 +40,9 @@ class Model(nn.Module):
             if 'vit' in name:
                 # print('frozen:',name)
                 p.requires_grad = False
+    
+    def de_frozen_layer(self):
+        for name, p in self.named_parameters():
+            if 'vit' in name:
+                # print('frozen:',name)
+                p.requires_grad = True
