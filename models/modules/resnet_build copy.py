@@ -704,11 +704,13 @@ class RPNOutputs(object):
 class Conv2d(nn.Conv2d):
     def __init__(self, *args, **kwargs):
         norm = kwargs.pop("norm", None)
-        activation = kwargs.pop("activation", None)
+        # activation = kwargs.pop("activation", None)
         super().__init__(*args, **kwargs)
 
         self.norm = norm
-        self.activation = activation
+        # self.activation = activation
+        self.activation = nn.GELU()
+        self.dropout = nn.Dropout(0.1)
 
     def forward(self, x):
         if x.numel() == 0 and self.training:
@@ -734,6 +736,11 @@ class Conv2d(nn.Conv2d):
                 return empty
 
         x = super().forward(x)
+        if self.activation is not None:
+            x = self.activation(x)
+
+        x = self.dropout(x)
+
         if self.norm is not None:
             if isinstance(self.norm, nn.LayerNorm):
                 x_shape = x.shape
@@ -742,8 +749,7 @@ class Conv2d(nn.Conv2d):
                 x = x.view(x_shape)
             else:
                 x = self.norm(x)
-        if self.activation is not None:
-            x = self.activation(x)
+        
         return x
 
 
@@ -839,7 +845,8 @@ class BottleneckBlock(ResNetBlockBase):
         output_size=14,
     ):
         super().__init__(in_channels, out_channels, stride)
-
+        self.output_size = output_size
+        self.out_channels = out_channels
         if norm == 'Layernorm':
             out_c = bottleneck_channels * output_size * output_size
             out_c_3 = out_channels * output_size * output_size
@@ -894,13 +901,15 @@ class BottleneckBlock(ResNetBlockBase):
             bias=False,
             norm=get_norm(norm, out_c_3),
         )
+        self.layernorm = nn.LayerNorm(out_c_3)
 
     def forward(self, x):
+        B,D,W,H = x.shape
         out = self.conv1(x)
-        out = nn.functional.relu_(out)
+        # out = nn.functional.relu_(out)
 
         out = self.conv2(out)
-        out = nn.functional.relu_(out)
+        # out = nn.functional.relu_(out)
 
         out = self.conv3(out)
 
@@ -910,8 +919,8 @@ class BottleneckBlock(ResNetBlockBase):
             shortcut = x
 
         out += shortcut
-        out = nn.functional.relu_(out)
-        return out
+        # out = nn.functional.relu_(out)
+        return self.layernorm(out.view(B,-1)).view(B,self.out_channels,self.output_size,self.output_size)
 
 
 class Backbone(nn.Module, metaclass=ABCMeta):

@@ -65,9 +65,9 @@ class Structured3D(data.Dataset):
         boxes = np.concatenate([np.zeros((boxes.shape[0],1)).astype(np.float32), boxes], axis=1)
         param = np.concatenate([param_wall, param_floor, param_ceiling],axis=0)
         mask = np.ones(param.shape[0]).astype(np.float32)
-        feature, _ = torch.ops.torchvision.roi_pool(torch.tensor(feature), torch.tensor(boxes), ratio, self.output, self.output)
+        # feature, _ = torch.ops.torchvision.roi_pool(torch.tensor(feature), torch.tensor(boxes), ratio, self.output, self.output)
         batch_input = {
-            'feature':feature,
+            'feature':torch.tensor(feature),
             'param':param,
             'mask':mask,
             'flag':flag,

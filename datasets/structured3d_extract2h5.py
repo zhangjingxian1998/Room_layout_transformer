@@ -77,7 +77,7 @@ class Structured3D(data.Dataset):
             flag[0] = 1
         if flag_ceiling:
             flag[1] = 1
-        with h5py.File('/home/zhangjx/All_model/Non_cubiod/room_layout_transformer/data/structured3d_plane_feature.h5','a') as h5_data:
+        with h5py.File('/home/zhangjx/All_model/Non_cubiod/room_layout_transformer/data/structured3d_plane_feature_roi.h5','a') as h5_data:
             try:
                 h5_data.create_dataset(key_h5+'/'+'flag',data=flag)
                 h5_data.create_dataset(key_h5+'/'+'boxes_floor',data=boxes_floor)

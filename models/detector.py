@@ -1,5 +1,5 @@
 import pytorch_lightning as pl
-from models.resnet_up_dim import Resnet_up_dim
+from models.modules.resnet_up_dim import Resnet_up_dim
 import torch.nn as nn
 import torch
 from datasets.structured3d import Structured3D

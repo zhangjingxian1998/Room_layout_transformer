@@ -203,7 +203,7 @@ class ViTSelfAttention(nn.Module):
         x = x.view(*new_x_shape)
         return x.permute(0, 2, 1, 3)
 
-    def forward(self, hidden_states, head_mask=None, output_attentions=False,whole_mask=None):
+    def forward(self, hidden_states, head_mask=None, output_attentions=False,whole_mask=None,use_causal_attention=None):
         mixed_query_layer = self.query(hidden_states)
         
         key_layer = self.transpose_for_scores(self.key(hidden_states))
@@ -213,13 +213,19 @@ class ViTSelfAttention(nn.Module):
         # Take the dot product between "query" and "key" to get the raw attention scores.
         attention_scores = torch.matmul(query_layer, key_layer.transpose(-1, -2))          ###转置，矩阵相乘
 
-        attention_scores = attention_scores + whole_mask
-
         attention_scores = attention_scores / math.sqrt(self.attention_head_size)           ##开平方  （缩放）
-
+        if whole_mask is not None:
+            attention_scores = attention_scores + whole_mask
+        if use_causal_attention:
+            causal_attention = torch.ones_like(whole_mask[0][0])
+            causal_attention = torch.tril(causal_attention, diagonal=0)
+            causal_attention = (1 - causal_attention) * torch.finfo(torch.float32).min
+            attention_scores = attention_scores + causal_attention
         # Normalize the attention scores to probabilities.
         attention_probs = nn.functional.softmax(attention_scores, dim=-1)         ##归一化（softmax）dim=-1 表示在最后一个维度上进行softmax操作
                                                                                   ##将注意力分数转化为注意力权重，用于自注意力机制中的加权池化操作
+        if whole_mask is not None:
+            attention_probs = attention_probs * (whole_mask != torch.finfo(torch.float32).min).float()
         # This is actually dropping out entire tokens to attend to, which might
         # seem a bit unusual, but is taken from the original Transformer paper.
         attention_probs = self.dropout(attention_probs)
@@ -284,8 +290,8 @@ class ViTAttention(nn.Module):
         self.attention.all_head_size = self.attention.attention_head_size * self.attention.num_attention_heads
         self.pruned_heads = self.pruned_heads.union(heads)
 
-    def forward(self, hidden_states, head_mask=None, output_attentions=False,whole_mask=None):
-        self_outputs = self.attention(hidden_states, head_mask, output_attentions,whole_mask=whole_mask)
+    def forward(self, hidden_states, head_mask=None, output_attentions=False,whole_mask=None,use_causal_attention=None):
+        self_outputs = self.attention(hidden_states, head_mask, output_attentions,whole_mask=whole_mask,use_causal_attention=use_causal_attention)
 
         attention_output = self.output(self_outputs[0], hidden_states)
 
@@ -338,12 +344,13 @@ class ViTLayer(nn.Module):
         self.layernorm_before = nn.LayerNorm(config.hidden_size, eps=config.layer_norm_eps)
         self.layernorm_after = nn.LayerNorm(config.hidden_size, eps=config.layer_norm_eps)
 
-    def forward(self, hidden_states, head_mask=None, output_attentions=False,whole_mask=None):
+    def forward(self, hidden_states, head_mask=None, output_attentions=False,whole_mask=None,use_causal_attention=None):
         self_attention_outputs = self.attention(
             self.layernorm_before(hidden_states),  # in ViT, layernorm is applied before self-attention
             head_mask,
             output_attentions=output_attentions,
-            whole_mask=whole_mask
+            whole_mask=whole_mask,
+            use_causal_attention=use_causal_attention
         )
         attention_output = self_attention_outputs[0]
         outputs = self_attention_outputs[1:]  # add self attentions if we output attention weights
@@ -377,7 +384,8 @@ class ViTEncoder(nn.Module):
         output_attentions=False,
         output_hidden_states=False,
         return_dict=True,
-        whole_mask=None
+        whole_mask=None,
+        use_causal_attention=None
     ):
         all_hidden_states = () if output_hidden_states else None
         all_self_attentions = () if output_attentions else None
@@ -402,7 +410,7 @@ class ViTEncoder(nn.Module):
                     layer_head_mask,
                 )
             else:
-                layer_outputs = layer_module(hidden_states, layer_head_mask, output_attentions,whole_mask=whole_mask)
+                layer_outputs = layer_module(hidden_states, layer_head_mask, output_attentions,whole_mask=whole_mask,use_causal_attention=use_causal_attention)
 
             hidden_states = layer_outputs[0]
 
@@ -532,7 +540,8 @@ class ViTModel(ViTPreTrainedModel):
         output_hidden_states=None,
         interpolate_pos_encoding=None,
         return_dict=None,
-        whole_mask=None
+        whole_mask=None,
+        use_causal_attention=None
     ):
         output_attentions = output_attentions if output_attentions is not None else self.config.output_attentions
         output_hidden_states = (
@@ -561,7 +570,8 @@ class ViTModel(ViTPreTrainedModel):
             output_attentions=output_attentions,
             output_hidden_states=output_hidden_states,
             return_dict=return_dict,
-            whole_mask=whole_mask
+            whole_mask=whole_mask,
+            use_causal_attention=use_causal_attention
         )
         sequence_output = encoder_outputs[0]
         sequence_output = self.layernorm(sequence_output)

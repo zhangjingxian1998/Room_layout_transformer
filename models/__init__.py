@@ -1,1 +1,1 @@
-from models.resnet_build import ResNet, BottleneckBlock
+from models.modules.resnet_build import ResNet, BottleneckBlock
